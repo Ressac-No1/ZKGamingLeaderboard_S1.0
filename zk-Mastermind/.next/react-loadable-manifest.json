@@ -1,0 +1,14 @@
+{
+  "components/Game.tsx -> @talismn/connect-components": {
+    "id": "components/Game.tsx -> @talismn/connect-components",
+    "files": [
+      "static/chunks/node_modules_talismn_connect-components_dist_connect-components_js.js"
+    ]
+  },
+  "node_modules/zkverifyjs/dist/esm/api/start/index.js -> @polkadot/extension-dapp": {
+    "id": "node_modules/zkverifyjs/dist/esm/api/start/index.js -> @polkadot/extension-dapp",
+    "files": [
+      "static/chunks/node_modules_polkadot_extension-dapp_index_js.js"
+    ]
+  }
+}
