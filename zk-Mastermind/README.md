@@ -4,7 +4,7 @@ Mastermind is a simple 2-player board game, in which the goal of the code breake
 
 The author of the original project is [adam-maj](https://github.com/adam-maj/zk-mastermind). We launched this project in Sept. 2024 at [EthWarsaw Hackathon](https://devfolio.co/projects/zkmastermindetherwarsawedition-d904) with the help of the core team of ZkVerify.
 
-![Verifiable zkMastermind](/public/ZKVerifiableMastermind.png)
+![Verifiable zkMastermind](/zk-Mastermind/public/ZKVerifiableMastermind.png)
 
 ## Team members & roles
 
