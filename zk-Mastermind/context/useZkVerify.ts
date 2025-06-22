@@ -13,10 +13,6 @@ export function useZkVerify(selectedAccount: string | null) {
   ): Promise<{ events: any }> => {
     setVerifying(true);
 
-    if (typeof window === 'undefined') {
-      throw new Error('This operation can only be performed in the browser.');
-    }
-
     if (!proof || !publicSignals || !vk) {
       throw new Error('Proof, public signals, or verification key is missing');
     }

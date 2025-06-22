@@ -1,3 +1,4 @@
+"use client";
 import {
   Stack,
   HStack,
@@ -14,7 +15,7 @@ import {
   AccordionButton,
   AccordionPanel,
 } from "@chakra-ui/react";
-import { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useGame, COLORS } from "../context/GameContext";
 import dynamic from "next/dynamic";
 import { FaTimes } from "react-icons/fa";
@@ -27,10 +28,32 @@ const WalletSelect = dynamic(() =>
 );
 
 const Game: React.FC = () => {
-  const { game, dispatch, accountAddr, setAccountAddr, walletSource, setWalletSource, submitRow, submitGame, verify } = useGame();
+  const { game, dispatch, accountAddr, setAccountAddr, walletSource, setWalletSource, gameplayEntry, newGame, submitRow, submitGame, verify } = useGame();
   const [ isWalletSelectOpen, setIsWalletSelectOpen ] = useState(false);
 
   const currentRow = game.board.map((row) => row.submitted).indexOf(false);
+
+  const submitToLeaderboard = async () => {
+    const { account, score, verified, gameplayHash } = gameplayEntry;
+
+    await fetch("/api/leaderboard", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        account,
+        score,
+        verified,
+        gameplayHash,
+      }),
+    });
+  }
+
+  useEffect(() => {
+    if (gameplayEntry)
+      submitToLeaderboard();
+  }, [gameplayEntry]);
 
   return (
     <Stack align="center" position="relative">
@@ -145,7 +168,7 @@ const Game: React.FC = () => {
                 <Button
                   size="sm"
                   colorScheme="blue"
-                  onClick={() => dispatch({ type: "NEW_GAME" })}
+                  onClick={() => newGame()}
                 >
                   New Game
                 </Button>

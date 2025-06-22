@@ -1,7 +1,7 @@
 {
-  "name": "zk-Mastermind-Leaderboard",
+  "name": "General-ZK-Leaderboard-Mastermind",
   "version": "1.0.0",
-  "description": "The zk-Mastermind game with a leaderboard, which secured by ZK circuit authentication and evaluation of gameplay, as a typical gaming use case of ZkVerify",
+  "description": "A general gaming leaderboard project integrating various games, in which ZK circuits are used for authentication and evaluation of gameplay. Here is one of the sample games: Mastermind. Promoted by ZkVerify as a typical gaming use case",
   "main": "index.js",
   "scripts": {
     "build:circuits": "node scripts/build-circuits.mjs",
