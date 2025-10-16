@@ -67,21 +67,23 @@ const HallOfFame: React.FC = () => {
                   <Th>Account</Th>
                   <Th isNumeric>Score</Th>
                   <Th>Proof Verified</Th>
-                  <Th>Gameplay Hash</Th>
+                  <Th>Game Initialization Key</Th>
+                  <Th>Local Hash</Th>
                 </Tr>
               </Thead>
               <Tbody>
                 {entries.map((entry, idx) => (
                   <Tr key={entry.gameplayHash}>
                     <Td isNumeric>{idx + 1}</Td>
-                    <Td>{entry.account ? entry.account : "Anonym"}</Td>
+                    <Td>{entry.account}</Td>
                     <Td isNumeric>{entry.score}</Td>
                     {entry.verified ? 
                       <Td><Icon as={BsShieldCheck} color="#666" boxSize={6} /></Td>
                     :
                       <Td><Icon as={FaTimes} color="red.400" boxSize={5} /></Td>
                     }
-                    <Td>{entry.gameplayHash}</Td>
+                    <Td>{entry.gameInitKey}</Td>
+                    <Td>{entry.localHash}</Td>
                   </Tr>
                 ))}
               </Tbody>

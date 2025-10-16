@@ -1,4 +1,3 @@
-"use client";
 import type { NextApiRequest, NextApiResponse } from "next";
 import path from "path";
 import fs from "fs";
@@ -15,10 +14,10 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
     else
       return res.status(200).json([]);
   } else if (req.method === "POST") {
-    const { account, score, verified, gameplayHash } = req.body;
+    const { account, gameInitKey, localHash, score, verified } = req.body;
 
-    const idx = scoreEntries.findIndex(_ => _.gameplayHash == gameplayHash);
-    // Delete the previous entry with the same gameplay hash
+    const idx = scoreEntries.findIndex(_ => _.account == account);
+    // Delete the accounts previous entry on the leaderboard
     if (idx >= 0) 
       scoreEntries = scoreEntries.slice(0, idx).concat(scoreEntries.slice(idx + 1));
 
@@ -27,16 +26,18 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
     if (rankIdx >= 0)
       scoreEntries = (scoreEntries.slice(0, rankIdx).concat([{
         account,
+	gameInitKey,
+	localHash,
         score,
         verified,
-        gameplayHash,
       }])).concat(scoreEntries.slice(rankIdx));
     else
       scoreEntries = scoreEntries.concat([{
         account,
+	gameInitKey,
+	localHash,
         score,
         verified,
-        gameplayHash,
       }]);
 
     fs.writeFileSync(whereIsScoreDb, JSON.stringify(scoreEntries));

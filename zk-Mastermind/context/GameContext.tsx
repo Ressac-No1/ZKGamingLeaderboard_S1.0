@@ -1,9 +1,7 @@
 import { useToast } from "@chakra-ui/react";
 //import { useContract } from "@thirdweb-dev/react";
-import { useZkVerify } from "./useZkVerify";
 import React, { useEffect, useState } from "react";
 import vkey from "../circuits/mastermind/keys/verification_key.json";
-import random from "seedrandom";
 
 const CODE_SIZE = 4;
 const NUM_ROWS = 10;
@@ -79,6 +77,7 @@ type GameAction =
       type: "SUBMIT_ROW";
       payload: {
         row: number;
+        solution: number[];
       };
     }
   | {
@@ -130,10 +129,10 @@ type Log = {
 };
 
 type Game = {
-  id: number;
   board: Row[];
   focusedRow: number;
   color: number;
+  started: boolean;
   solved: boolean;
   valid: boolean;
   verifiable: boolean;
@@ -144,22 +143,25 @@ type Game = {
   score?: number;
 };
 
+type LeaderboardEntry = {
+  account: string;
+  gameInitKey: BigInt;
+  localHash: string;
+  score: number;
+  verified: boolean;
+};
+
 type GameContextValue = {
   game: Game;
+  gameInitKey: BigInt;
   accountAddr: string | null;
   setAccountAddr: React.Dispatch<React.SetStateAction<string | null>>;
-  setWalletSource: React.Dispatch<React.SetStateAction<string | null>>;
+  gameplayEntry: LeaderboardEntry | null;
   dispatch: React.Dispatch<GameAction>;
+  newGame: () => void;
   submitRow: (row: number) => void;
   submitGame: () => void;
   verify: () => void;
-};
-
-type LeaderboardEntry = {
-  account: string;
-  score: number;
-  verified: boolean;
-  gameplayHash: string;
 };
 
 interface TxInfo {
@@ -171,24 +173,6 @@ interface TxInfo {
   status: string;
 }
 
-const DEFAULT_GAME = {
-  id: Math.floor(Math.random() * 0xDEADBEEF),
-  board: Array.from(Array(NUM_ROWS).keys()).map(() => ({
-    guess: Array(CODE_SIZE).fill(NUM_COLORS),
-    partial: 0,
-    correct: 0,
-    submitted: false,
-  })),
-  color: 0,
-  solved: false,
-  valid: false,
-  verifiable: false,
-  verified: false,
-  isLoading: false,
-  logs: [],
-  focusedRow: -1,
-};
-
 const GameContext = React.createContext<GameContextValue>(
   {} as GameContextValue
 );
@@ -197,28 +181,30 @@ export function useGame() {
   return React.useContext(GameContext);
 }
 
-const getSolution = (seed: number) => {
-  const generator = random(seed.toString());
-  const solution = [];
-  for (let i = 0; i < CODE_SIZE; i++) {
-    solution.push(Math.floor(generator.quick() * NUM_COLORS));
-  }
-  return solution;
-}
+const generateEmptyGame = () => ({
+  board: Array.from(Array(NUM_ROWS).keys()).map(() => ({
+    guess: Array(CODE_SIZE).fill(NUM_COLORS),
+    partial: 0,
+    correct: 0,
+    submitted: false,
+  })),
+  color: 0,
+  started: false,
+  solved: false,
+  valid: false,
+  verifiable: false,
+  verified: false,
+  isLoading: false,
+  logs: [],
+  focusedRow: -1,
+});
 
 const gameReducer = (state: Game, action: GameAction) => {
   const updatedState: Game = JSON.parse(JSON.stringify(state));
   switch (action.type) {
     case "NEW_GAME":
-      const game: Game = JSON.parse(JSON.stringify(DEFAULT_GAME));
-      game.id = Math.floor(Math.random() * 0xDEADBEEF);
-      game.color = NUM_COLORS;
-      game.solved = false;
-      game.valid = false;
-      game.verified = false;
-      game.isLoading = false;
-      game.logs = [];
-      game.focusedRow = -1;
+      const game: Game = JSON.parse(JSON.stringify(generateEmptyGame()));
+      game.started = true;
       game.proof = undefined;
       game.score = undefined;
       return game;
@@ -230,25 +216,8 @@ const gameReducer = (state: Game, action: GameAction) => {
       updatedState.focusedRow = action.payload.row;
       return updatedState;
     case "SUBMIT_ROW":
-      const solution = getSolution(state.id);
-      const colorCountOfGuess = Array(NUM_COLORS + 1).fill(0);
-      const colorCountOfSolution = Array(NUM_COLORS + 1).fill(0);
-
-      let correct = 0;
-      for (let i = 0; i < CODE_SIZE; i++)
-        if (state.board[action.payload.row].guess[i] == solution[i])
-          correct++;
-        else {
-          colorCountOfGuess[state.board[action.payload.row].guess[i]]++;
-          colorCountOfSolution[solution[i]]++;
-        }
-      updatedState.board[action.payload.row].correct = parseInt(correct);
-
-      let partial = 0;
-      for (let i = 0; i < NUM_COLORS; i++)
-        partial += Math.min(colorCountOfGuess[i], colorCountOfSolution[i]);
-      updatedState.board[action.payload.row].partial = parseInt(partial);
-
+      updatedState.board[action.payload.row].correct = parseInt(action.payload.correct);
+      updatedState.board[action.payload.row].partial = parseInt(action.payload.partial);
       updatedState.board[action.payload.row].submitted = true;
       if (updatedState.board[action.payload.row].correct === CODE_SIZE) {
         updatedState.solved = true;
@@ -284,14 +253,12 @@ const GameProvider: React.FC<{ children: JSX.Element }> = ({ children }) => {
   );*/
   const [game, dispatch] = React.useReducer(
     gameReducer,
-    JSON.parse(JSON.stringify(DEFAULT_GAME))
+    JSON.parse(JSON.stringify(generateEmptyGame()))
   );
 
   const [ accountAddr, setAccountAddr ] = useState<string | null>(null);
-  const [ walletSource, setWalletSource ] = useState<string | null>(null);
+  const [ gameInitKey, setGameInitKey ] = useState<BigInt | null>(null); 
   const [ gameplayEntry, setGameplayEntry ] = useState<LeaderboardEntry | null>(null);
-
-  const { onVerifyProof } = useZkVerify(null);
 
   useEffect(() => {
     if (game.solved)
@@ -302,29 +269,76 @@ const GameProvider: React.FC<{ children: JSX.Element }> = ({ children }) => {
   }, [game.solved, toast]);
 
   async function newGame() {
-    dispatch({
-      type: "NEW_GAME",
-    });
-    setGameplayEntry(null);
+    try {
+      const res = await fetch("/api/gameInit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          accountAddr: accountAddr || "0x0",
+        }),
+      });
+
+      const data = await res.json();
+      setGameInitKey(BigInt(data.initKey));
+    
+      dispatch({
+        type: "NEW_GAME",
+      });
+
+      dispatch({
+        type: "ADD_LOG",
+        payload: {
+          title: `New game initialized, with initialization key ${data.initKey}`,
+        },
+      });
+ 
+      setGameplayEntry(null);
+    } catch (error: unknown) {
+      dispatch({
+        type: "ADD_LOG",
+        payload: {
+          title: `New game initialization failed: ${(error as Error).message}`,
+        },
+      });
+    }
   }
 
   async function submitRow(row: number) {
-    const guessText = game.board[row].guess
-      .map((color: number) => COLORS[color].name)
-      .join(", ");
-    dispatch({
-      type: "ADD_LOG",
-      payload: {
-        title: `Sending guess ${
-          row + 1
-        } [${guessText}] to be checked by the code maker`,
-      },
-    });
+    const res = await fetch(`/api/guessRow?initKey=${gameInitKey.toString()}&guess=[${game.board[row].guess.toString()}]`);
+    if (res.ok) {
+      const data = await res.json();
+      const { correct, partial } = data;
+      const guessText = game.board[row].guess
+        .map((color: number) => COLORS[color].name)
+        .join(", ");
 
-    dispatch({
-      type: "SUBMIT_ROW",
-      payload: { row },
-    });
+      dispatch({
+        type: "ADD_LOG",
+        payload: {
+          title: `Sending guess ${
+            row + 1
+          } [${guessText}] to be checked by the code maker`,
+        },
+      });
+
+      dispatch({
+        type: "SUBMIT_ROW",
+        payload: {
+          row,
+          correct,
+          partial,
+        },
+      });
+    } else {
+      dispatch({
+        type: "ADD_LOG",
+        payload: {
+          title: `Failed to fetch the solution from server, please try again to send the guess ${row + 1}`,
+        },
+      }); 
+    }
   }
 
   async function submitGame() {
@@ -347,25 +361,37 @@ const GameProvider: React.FC<{ children: JSX.Element }> = ({ children }) => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ guessData, id: game.id }),
+        body: JSON.stringify({
+          guessData,
+          initKey: gameInitKey.toString(),
+        }),
       });
 
-      const data = await res.json();
+      if (res.ok) {
+        const data = await res.json();
 
-      dispatch({
-        type: "SUBMIT_GAME",
-        payload: {
-          proof: data,
-        }
-      });
+        dispatch({
+          type: "SUBMIT_GAME",
+          payload: {
+            proof: data,
+          }
+        });
 
-      dispatch({
-        type: "ADD_LOG",
-        payload: {
-          title: `Received zkSNARK proof from the code maker of the game, with a score of ${data.publicSignals[0]}`,
-          body: `${JSON.stringify(data.proof)}`
-        },
-      });
+        dispatch({
+          type: "ADD_LOG",
+          payload: {
+            title: `Received zkSNARK proof from the code maker of the game, with a score of ${data.publicSignals[0]}`,
+            body: `${JSON.stringify(data.proof)}`
+          },
+        });
+      } else {
+        dispatch({
+          type: "ADD_LOG",
+          payload: {
+            title: 'Failed in zkSNARK proof generation of this game, maybe due to the broken guess data',
+          },
+        });
+      }
 
       dispatch({
         type: "SUBMISSION_DONE",
@@ -398,12 +424,24 @@ const GameProvider: React.FC<{ children: JSX.Element }> = ({ children }) => {
   }
 
   async function verify() {
+    let vkRegistered = false;
+    /*try {
+      const vkRegRes = await fetch("/api/registerVk");
+      if (vkRegRes.ok) {
+        const vkRegStatus = await vkRegRes.json();
+        // vkRegistered = !!(vkRegStatus && vkRegStatus.Vkey);
+        console.log(vkRegStatus);
+      }
+    } catch (err: unknown) { 
+      throw(err);
+    }*/
+
     const proof = game.proof;
 
     dispatch({
       type: "ADD_LOG",
       payload: {
-        title: `Verifying proof of gameplay authenticated by hash ${proof.publicSignals[1]}`,
+        title: `Verifying proof of gameplay ${gameInitKey.toString()}, authenticated by local hash ${proof.publicSignals[1]}`,
       },
     });
 
@@ -415,61 +453,54 @@ const GameProvider: React.FC<{ children: JSX.Element }> = ({ children }) => {
     });
 
     try {
-      const { events } = await onVerifyProof(
-        proof.proof,
-        proof.publicSignals,
-        vkey,
-        walletSource,
-        accountAddr
-      );
-    
-      events.on('error', (error: Error) => {
-        console.error('Error in proof transaction processing:', error);
-        throw error;
+      const res = await fetch("/api/verify", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          proof: proof.proof,
+          publicSignals: proof.publicSignals,
+          vk: vkey,
+          vkRegistered: false,
+        }),
       });
 
-      events.on('includedInBlock', (eventData) => {
-        console.log('Proof transaction is included in block:', eventData);
+      const data = await res.json();
+      const valid = !!(data.verified);
+      
+      dispatch({
+        type: "VERIFY_GAME",
+        payload: {
+          valid: valid,
+        },
       });
 
-      events.on('finalized', (eventData) => {
-        console.log('Proof transaction processing is finalized:', eventData);
-        const finalizedTx: TxInfo = {
-          ...eventData,
-          txHash: eventData.txHash ? eventData.txHash : eventData.transactionHash,
-        };
-        
-        const valid = !!(finalizedTx && finalizedTx.status == "finalized" && finalizedTx.blockHash && finalizedTx.txHash)
-          
-        dispatch({
-          type: "VERIFY_GAME",
-          payload: {
-            valid: valid,
-          },
-        });
+      dispatch({
+        type: "ADD_LOG",
+        payload: {
+          title: valid
+            ? `Proof successfully verified by contract at time ${data.timestamp}! Tx hash: ${data.txHash}`
+            : (data.error
+              ? `Contract rejected to verify the proof! Error: ${data.error}`
+              : 'Contract rejected to verify the proof!'
+            )
+        },
+      });
 
-        dispatch({
-          type: "ADD_LOG",
-          payload: {
-            title: valid
-              ? 'Proof succesfully verified by contract!'
-              : 'Contract rejected, proof is invalid!',
-          },
-        });
+      dispatch({
+        type: "SET_LOADING",
+        payload: {
+          loading: false,
+        },
+      });
 
-        dispatch({
-          type: "SET_LOADING",
-          payload: {
-            loading: false,
-          },
-        });
-
-        setGameplayEntry({
-          account: accountAddr,
-          score: game.score,
-          verified: valid,
-          gameplayHash: game.proof.publicSignals[1],
-        });
+      setGameplayEntry({
+        account: accountAddr,
+        gameInitKey,
+        localHash: proof.publicSignals[1],
+        score: game.score,
+        verified: valid,
       });
     } catch (error: unknown) {
       dispatch({
@@ -496,7 +527,7 @@ const GameProvider: React.FC<{ children: JSX.Element }> = ({ children }) => {
   }
 
   return (
-    <GameContext.Provider value={{ game, dispatch, accountAddr, setAccountAddr, walletSource, setWalletSource, gameplayEntry, newGame, submitRow, submitGame, verify }}>
+    <GameContext.Provider value={{ game, dispatch, accountAddr, setAccountAddr, gameplayEntry, gameInitKey, newGame, submitRow, submitGame, verify }}>
       {children}
     </GameContext.Provider>
   );

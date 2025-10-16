@@ -17,24 +17,62 @@ import {
 } from "@chakra-ui/react";
 import React, { useEffect, useState } from "react";
 import { useGame, COLORS } from "../context/GameContext";
-import dynamic from "next/dynamic";
+//import dynamic from "next/dynamic";
 import { FaTimes } from "react-icons/fa";
 import { BsShieldCheck } from "react-icons/bs";
+import injectedModule from "@subwallet-connect/injected-wallets";
+import subwalletModule from "@subwallet-connect/subwallet";
+import subwalletPolkadotModule from "@subwallet-connect/subwallet-polkadot";
+import { init, useConnectWallet } from "@subwallet-connect/react";
 
-const WalletSelect = dynamic(() =>
-  import('@talismn/connect-components').then((mod) => mod.WalletSelect), {
-    ssr: false,
-  }
-);
+const injected = injectedModule();
+const subwalletWallet = subwalletModule();
+const subwalletPolkadotWalet = subwalletPolkadotModule();
+const onboardConfig = {
+  wallets: [injected, subwalletWallet, subwalletPolkadotWalet],
+  chains: [
+    {
+      id: '0x1',
+      namespace: 'evm',
+      token: 'ETH',
+      label: 'Mainnet',
+      rpcUrl: 'https://eth.llamarpc.com',
+      blockExplorerUrl: 'https://etherscan.io/',
+      decimal: 18
+    },
+    {
+      id: 11155111,
+      namespace: 'evm',
+      token: 'ETH',
+      label: 'Sepolia',
+      rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
+      blockExplorerUrl: 'https://sepolia.etherscan.io/',
+      decimal: 18
+    }
+  ],
+  chainsPolkadot: [
+    {
+      id: '0x91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3',
+      namespace: 'substrate',
+      token: 'DOT',
+      label: 'Polkadot',
+      rpcUrl: `polkadot.api.subscan.io`,
+      blockExplorerUrl: 'https://polkadot.subscan.io/',
+      decimal: 10
+    }
+  ]
+};
+// Initialize Onboard
+init(onboardConfig);
 
 const Game: React.FC = () => {
-  const { game, dispatch, accountAddr, setAccountAddr, walletSource, setWalletSource, gameplayEntry, newGame, submitRow, submitGame, verify } = useGame();
-  const [ isWalletSelectOpen, setIsWalletSelectOpen ] = useState(false);
+  const { game, dispatch, accountAddr, setAccountAddr, gameplayEntry, newGame, submitRow, submitGame, verify } = useGame();
+  const [{ wallet, connecting }, connect, disconnect] = useConnectWallet();
 
   const currentRow = game.board.map((row) => row.submitted).indexOf(false);
 
   const submitToLeaderboard = async () => {
-    const { account, score, verified, gameplayHash } = gameplayEntry;
+    const { account, gameInitKey, localHash, score, verified } = gameplayEntry;
 
     await fetch("/api/leaderboard", {
       method: "POST",
@@ -43,12 +81,20 @@ const Game: React.FC = () => {
       },
       body: JSON.stringify({
         account,
+        gameInitKey: gameInitKey.toString(),
+        localHash,
         score,
         verified,
-        gameplayHash,
       }),
     });
   }
+
+  useEffect(() => {
+    if (wallet && wallet.accounts)
+      setAccountAddr(wallet.accounts[0].address);
+    else
+      setAccountAddr(null);
+  }, [wallet]);
 
   useEffect(() => {
     if (gameplayEntry)
@@ -101,22 +147,11 @@ const Game: React.FC = () => {
               <Button
                 size="sm"
                 colorScheme="orange"
-                onClick={() => setIsWalletSelectOpen(true)}
+                onClick={() => (wallet ? disconnect(wallet) : connect())}
+                isLoading={connecting}
               >
-                {accountAddr ? `${accountAddr.slice(0, 4)}...${accountAddr.slice(-4)}` : 'Connect'}
+                {wallet ? 'Disconnect' : 'Connect'}
               </Button>
-              {isWalletSelectOpen && (
-                <WalletSelect
-                  dappName="zkLeaderboardMastermind"
-                  open={isWalletSelectOpen}
-                  showAccountsList={true}
-                  onWalletConnectOpen={() => setIsWalletSelectOpen(true)}
-                  onWalletConnectClose={() => setIsWalletSelectOpen(false)}
-                  onWalletSelected={(wallet: any) => setWalletSource(wallet.extensionName)}
-                  onAccountSelected={(account: any) => setAccountAddr(account.address)}
-                  onUpdatedAccounts={(accounts: any[] | undefined) => setAccountAddr(accounts && accounts[0] ? accounts[0].address : null)}
-                />
-              )}
               {game.solved && !game.proof && !game.verified && (
                 <Button
                   size="sm"
@@ -127,7 +162,7 @@ const Game: React.FC = () => {
                   Prove
                 </Button>
               )}
-              {walletSource && accountAddr && game.solved && game.verifiable && game.proof && !game.verified && (
+              {accountAddr && game.solved && game.verifiable && game.proof && !game.verified && (
                 <Button
                   size="sm"
                   colorScheme="gray"
@@ -164,7 +199,7 @@ const Game: React.FC = () => {
                   </Tooltip>
                 </Flex>
               )}
-              {(((!walletSource || !accountAddr || !game.verifiable) && game.solved) || game.verified || game.board[9].submitted) && (
+              {(!game.started || ((!accountAddr || !game.verifiable) && game.solved) || game.verified || game.board[9].submitted) && (
                 <Button
                   size="sm"
                   colorScheme="blue"
@@ -205,7 +240,7 @@ const Game: React.FC = () => {
                           : undefined
                       }
                       onClick={
-                        rowIndex === currentRow && !game.solved && !game.board[rowIndex].submitted
+                        game.started && rowIndex === currentRow && !game.solved && !game.board[rowIndex].submitted
                           ? () =>
                               dispatch({
                                 type: "EDIT_ROW",
@@ -268,6 +303,9 @@ const Game: React.FC = () => {
         </Flex>
 
         <Flex direction="column" bg="black" border="1px solid #222">
+          <Text fontSize="12px" marginX="20px" alignSelf="flex-start">
+            {accountAddr ? `Account: ${accountAddr}` : 'Connect with an account'}
+          </Text>
           <Text
             fontSize="24px"
             marginX="20px"

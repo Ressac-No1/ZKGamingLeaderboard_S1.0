@@ -3,5 +3,8 @@
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
   "/": "pages/index.js",
+  "/api/guessRow": "pages/api/guessRow.js",
+  "/api/verify": "pages/api/verify.js",
+  "/api/proof": "pages/api/proof.js",
   "/api/leaderboard": "pages/api/leaderboard.js"
 }

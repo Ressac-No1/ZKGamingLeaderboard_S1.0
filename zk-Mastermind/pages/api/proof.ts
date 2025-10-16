@@ -19,45 +19,38 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
     return res.status(405).end();
   }
 
-  const { guessData, id } = req.body;
-  const { guess, numPartial, numCorrect } = guessData;
+  const { guess, numPartial, numCorrect } = req.body.guessData;
+  const initKey = BigInt(req.body.initKey);
+
+  const CURRENT_ZKMASTERMIND_RELEASE_ID = 0x1001;
+  const ARCADE_LOCAL_SEED = process.env.ARCADE_LOCAL_SEED ? BigInt(process.env.ARCADE_LOCAL_SEED) : 0n;
+  const INIT_SALT = process.env.INIT_SALT ? BigInt(process.env.INIT_SALT) : 0n;
   const CODE_SIZE = 4;
   const NUM_ROWS = 10;
   const NUM_COLORS = 8;
   const REAL_ROWS = numPartial.length;
-  if (!(REAL_ROWS <= NUM_ROWS && numCorrect.length == REAL_ROWS && guess.length == REAL_ROWS * CODE_SIZE)) {
-    return res.status(400).end();
+  if (REAL_ROWS > NUM_ROWS || numCorrect.length != REAL_ROWS || guess.length != REAL_ROWS * CODE_SIZE) {
+    return res.status(400).json({ 'error': 'Format error in guess data' });
   }
   const SCORE_FACTORS = process.env.SCORE_FACTORS ? (JSON.parse(process.env.SCORE_FACTORS)).slice(0, CODE_SIZE) : [3, 8, 25, 90];
 
-  const generator = random(id.toString());
+  const initSeed = initKey + ARCADE_LOCAL_SEED + INIT_SALT;
+  const generator = random(initSeed.toString());
   const solution = [];
   for (let i = 0; i < CODE_SIZE; i++) {
     solution.push(Math.floor(generator.quick() * NUM_COLORS));
   }
 
   const poseidon = await buildPoseidon();
-
-  const salt = id * 42;
-  let rawHash = poseidon([salt, ...solution]);
-  for (let i = 0; i < NUM_ROWS; i++)
-    if (i < REAL_ROWS) {
-      rawHash = poseidon([rawHash, ...guess.slice(i * CODE_SIZE, (i + 1) * CODE_SIZE)]);
-    } else {
-      emptyGuess = Array(CODE_SIZE).fill(NUM_COLORS);
-      rawHash = poseidon([rawHash, ...emptyGuess]);
-      guess.concat(emptyGuess);
-      numPartial.concat([0]);
-      numCorrect.concat([0]);
-    }
-  const gameplayHash = poseidon.F.toObject(rawHash).toString();
+  const localHash = poseidon.F.toObject(poseidon([CURRENT_ZKMASTERMIND_RELEASE_ID, 0, ARCADE_LOCAL_SEED, 0, INIT_SALT])).toString();
   const inputs = {
-    gameplayHash,
+    localHash,
+    arcadeLocalSeed: ARCADE_LOCAL_SEED,
+    gameInitializationSalt: INIT_SALT,
     guess,
     numPartial,
     numCorrect,
     solution,
-    gameplaySalt: salt,
     scoreFactor: SCORE_FACTORS,
   };
 

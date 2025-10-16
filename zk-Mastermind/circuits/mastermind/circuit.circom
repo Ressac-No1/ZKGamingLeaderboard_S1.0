@@ -16,7 +16,7 @@ template ValidColor(numColors) {
   out <== isValid.out;
 }
 
-template Mastermind(codeSize, numRows, numColors) {
+template Mastermind(releaseId, codeSize, numRows, numColors) {
   // ================== ASSERTIONS =================
   assert(codeSize <= 8); // No more than 8 possible values in code
   assert(numColors <= 16); // No more that 16 possible colors
@@ -26,14 +26,15 @@ template Mastermind(codeSize, numRows, numColors) {
   assert(codeSize <= numColors); // No more possible values than colors
 
   // ============ PUBLIC INPUT SIGNALS =============
-  signal input gameplayHash; // Currently the hash of the breakers gameplay acts as authentication
+  signal input localHash; // The hash value upon the games release ID, the arcades local seed and a random value (salt) used in the game data initialization, for authentication
 
   // ============ PRIVATE INPUT SIGNALS ============
+  signal input arcadeLocalSeed; // The arcades local seed, remained in secret
+  signal input gameInitializationSalt; // The salt used for initializing the game
   signal input guess[numRows * codeSize]; // The players guess, aligned by round
   signal input numPartial[numRows]; // The number of partial matches (correct color but incorrect location) of each guess
   signal input numCorrect[numRows]; // The number of correct matches (correct color and correct location) of each guess
   signal input solution[codeSize]; // The game masters private solution
-  signal input gameplaySalt; // The game masters private salt for the gameplay hash calculation
   signal input scoreFactor[codeSize]; // The factor of each number of correct matches that are multiplied by the weight of the round reaching at least such number of correct matches
 
   // ============ INTERMEDIATE SIGNALS =============
@@ -42,6 +43,15 @@ template Mastermind(codeSize, numRows, numColors) {
 
   // =============== OUTPUT SIGNALS ================
   signal output score; // The score of the gameplay
+
+  // Authenticate the games integrity via the local hash
+  component correctLocalHash = Poseidon(5);
+  correctLocalHash.inputs[0] <== releaseId;
+  correctLocalHash.inputs[1] <== 0;
+  correctLocalHash.inputs[2] <== arcadeLocalSeed;
+  correctLocalHash.inputs[3] <== 0;
+  correctLocalHash.inputs[4] <== gameInitializationSalt;
+  correctLocalHash.out === localHash;
 
   component guessColorsValid[numRows * codeSize];
   component solutionColorsValid[codeSize];
@@ -123,28 +133,6 @@ template Mastermind(codeSize, numRows, numColors) {
     countPartial === numPartial[k];
   }
 
-  // Authenticate the gameplay by hashing
-  component solutionHash = Poseidon(1 + codeSize);
-  solutionHash.inputs[0] <== gameplaySalt;
-  for (var i = 0; i < codeSize; i++) {
-    solutionHash.inputs[i + 1] <== solution[i];
-  }
-
-  component gameplayHashByRound[numRows];
-  for (var i = 0; i < numRows; i++) {
-    gameplayHashByRound[i] = Poseidon(1 + codeSize);
-    if (i == 0)
-      gameplayHashByRound[i].inputs[0] <== solutionHash.out;
-    else
-      gameplayHashByRound[i].inputs[0] <== gameplayHashByRound[i - 1].out;
-
-    for (var j = 0; j < codeSize; j++) {
-      gameplayHashByRound[i].inputs[j + 1] <== guess[i * codeSize + j];
-    }
-  }
-
-  gameplayHashByRound[numRows - 1].out === gameplayHash;
-
   // Calculate score weight of each round, following the Fibonacci sequence
   // Note that the weight of round i is the sum of roundWeightDiff[i..numRows)
   var roundWeightDiff[numRows];
@@ -183,4 +171,4 @@ template Mastermind(codeSize, numRows, numColors) {
   score <== totalScore;
 }
 
-component main { public [gameplayHash] } = Mastermind(4, 10, 9);
+component main { public [localHash] } = Mastermind(0x1001, 4, 10, 9);
