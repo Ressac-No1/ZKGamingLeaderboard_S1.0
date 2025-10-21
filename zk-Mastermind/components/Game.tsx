@@ -144,14 +144,16 @@ const Game: React.FC = () => {
               <Text fontSize="24px" alignSelf="flex-start">
                 G A M E
               </Text>
-              <Button
-                size="sm"
-                colorScheme="orange"
-                onClick={() => (wallet ? disconnect(wallet) : connect())}
-                isLoading={connecting}
-              >
-                {wallet ? 'Disconnect' : 'Connect'}
-              </Button>
+              {!game.started && (
+                <Button
+                  size="sm"
+                  colorScheme="orange"
+                  onClick={() => (wallet ? disconnect(wallet) : connect())}
+                  isLoading={connecting}
+                >
+                  {wallet ? 'Disconnect' : 'Connect'}
+                </Button>
+              )}
               {game.solved && !game.proof && !game.verified && (
                 <Button
                   size="sm"

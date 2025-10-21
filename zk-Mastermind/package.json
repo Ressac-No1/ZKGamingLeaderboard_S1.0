@@ -6,6 +6,8 @@
   "scripts": {
     "build:circuits": "node scripts/build-circuits.mjs",
     "build:contract": "node scripts/build-contract.mjs",
+    "authorize:arcade": "node --env-file .env.development scripts/authorize-arcade.mjs",
+    "register:vkey": "node --env-file .env.development scripts/register-vkey.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start"
@@ -35,6 +37,7 @@
     "remove": "^0.1.5",
     "seedrandom": "^3.0.5",
     "snarkjs": "^0.7.5",
+    "web3": "^4.16.0",
     "zkverifyjs": "^0.14.0"
   },
   "devDependencies": {

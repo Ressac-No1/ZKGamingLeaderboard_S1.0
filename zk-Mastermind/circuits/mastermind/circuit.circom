@@ -27,17 +27,20 @@ template Mastermind(releaseId, codeSize, numRows, numColors) {
 
   // ============ PUBLIC INPUT SIGNALS =============
   signal input localHash; // The hash value upon the games release ID, the arcades local seed and a random value (salt) used in the game data initialization, for authentication
+  signal input gameInitializationKey; // The initialization key of the game, which is on-chain cerificated
 
   // ============ PRIVATE INPUT SIGNALS ============
   signal input arcadeLocalSeed; // The arcades local seed, remained in secret
   signal input gameInitializationSalt; // The salt used for initializing the game
+  signal input solution[codeSize]; // The game masters private solution, determined by the game initialization seed
   signal input guess[numRows * codeSize]; // The players guess, aligned by round
   signal input numPartial[numRows]; // The number of partial matches (correct color but incorrect location) of each guess
   signal input numCorrect[numRows]; // The number of correct matches (correct color and correct location) of each guess
-  signal input solution[codeSize]; // The game masters private solution
   signal input scoreFactor[codeSize]; // The factor of each number of correct matches that are multiplied by the weight of the round reaching at least such number of correct matches
 
   // ============ INTERMEDIATE SIGNALS =============
+  signal exponents[codeSize]; // The exponentiation results in the calculation of solution verification
+  signal quotient; // The intermediate quotinent in such a calculation procedure
   signal maxReachedCorrect[numRows]; // The maximum of correct matches till each guess round
   signal scoreItems[numRows * codeSize]; // To calculate the final score by each guess round and each number of correct matches reached
 
@@ -52,6 +55,14 @@ template Mastermind(releaseId, codeSize, numRows, numColors) {
   correctLocalHash.inputs[3] <== 0;
   correctLocalHash.inputs[4] <== gameInitializationSalt;
   correctLocalHash.out === localHash;
+
+  // Verify the game masters solution
+  var gameInitializationSeed = gameInitializationKey + arcadeLocalSeed + gameInitializationSalt;
+  exponents[0] <== solution[codeSize - 1];
+  for (var i = 1; i < codeSize; i++)
+    exponents[i] <== exponents[i - 1] * (numColors - 1) + solution[codeSize - 1 - i];
+  quotient <-- gameInitializationSeed \ ((numColors - 1) ** codeSize);
+  quotient * ((numColors - 1) ** codeSize) + exponents[codeSize - 1] === gameInitializationSeed;
 
   component guessColorsValid[numRows * codeSize];
   component solutionColorsValid[codeSize];
@@ -171,4 +182,4 @@ template Mastermind(releaseId, codeSize, numRows, numColors) {
   score <== totalScore;
 }
 
-component main { public [localHash] } = Mastermind(0x1001, 4, 10, 9);
+component main { public [localHash, gameInitializationKey] } = Mastermind(0x1001, 4, 10, 9);

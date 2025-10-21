@@ -1,16 +1,27 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import axios from "axios";
+import fs from "fs";
 
 const handler = async (req: NextApiRequest, res: NextApiResponse) => {
   if (req.method !== "POST") {
     return res.status(405).end();
   }
 
-  const { proof, publicSignals, vk } = req.body;
-  if (!proof || !publicSignals || !vk) {
-    return res.status(400).json({ 'error': 'Proof, public signals, or verification key is missing' });
+  const PATH_OF_REGISTERED_VKEY = "config/registered_verification_key.json";
+  const PATH_OF_ORIGINAL_VKEY = "circuits/mastermind/keys/verification_key.json";
+  const vkRegistered = fs.existsSync(PATH_OF_REGISTERED_VKEY);
+  const vkFound = fs.existsSync(PATH_OF_ORIGINAL_VKEY);
+
+  if (!vkRegistered && !vkFound) {
+    return res.status(400).json({ 'error': 'No verification key found' });
   }
-  const vkRegistered = !!(req.body.vkRegistered);
+
+  const { proof, publicSignals } = req.body;
+  if (!proof || !publicSignals) {
+    return res.status(400).json({ 'error': 'Proof or public signals is missing' });
+  }
+  const vkHash = vkRegistered ? (JSON.parse(fs.readFileSync(PATH_OF_REGISTERED_VKEY))).vkHash : undefined;
+  const vk = vkFound ? JSON.parse(fs.readFileSync(PATH_OF_ORIGINAL_VKEY)) : undefined;
 
   const SUBMIT_PROOF_API_URL = `${process.env.API_BASE_URL}/submit-proof/${process.env.API_KEY}`;
   const JOB_STATUS_API_URL = `${process.env.API_BASE_URL}/job-status/${process.env.API_KEY}`;
@@ -25,7 +36,7 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
     proofData: {
       proof,
       publicSignals,
-      vk,
+      vk: vkHash || vk,
     },
   });
 

@@ -1,5 +1,4 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import random from "seedrandom";
 
 const handler = async (req: NextApiRequest, res: NextApiResponse) => {
   if (req.method === "GET") {
@@ -9,11 +8,11 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
     const CODE_SIZE = 4;
     const NUM_COLORS = 8;
 
-    const initSeed = initKey + ARCADE_LOCAL_SEED + INIT_SALT;
-    const generator = random(initSeed.toString());
+    let _initSeed = initKey + ARCADE_LOCAL_SEED + INIT_SALT;
     const solution = [];
     for (let i = 0; i < CODE_SIZE; i++) {
-      solution.push(Math.floor(generator.quick() * NUM_COLORS));
+      solution.push(Number(_initSeed % BigInt(NUM_COLORS)));
+      _initSeed /= BigInt(NUM_COLORS);
     }
 
     const guess = JSON.parse(req.query.guess);

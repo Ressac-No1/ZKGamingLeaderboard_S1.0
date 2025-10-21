@@ -1,7 +1,6 @@
 import { useToast } from "@chakra-ui/react";
 //import { useContract } from "@thirdweb-dev/react";
 import React, { useEffect, useState } from "react";
-import vkey from "../circuits/mastermind/keys/verification_key.json";
 
 const CODE_SIZE = 4;
 const NUM_ROWS = 10;
@@ -424,18 +423,6 @@ const GameProvider: React.FC<{ children: JSX.Element }> = ({ children }) => {
   }
 
   async function verify() {
-    let vkRegistered = false;
-    /*try {
-      const vkRegRes = await fetch("/api/registerVk");
-      if (vkRegRes.ok) {
-        const vkRegStatus = await vkRegRes.json();
-        // vkRegistered = !!(vkRegStatus && vkRegStatus.Vkey);
-        console.log(vkRegStatus);
-      }
-    } catch (err: unknown) { 
-      throw(err);
-    }*/
-
     const proof = game.proof;
 
     dispatch({
@@ -461,8 +448,6 @@ const GameProvider: React.FC<{ children: JSX.Element }> = ({ children }) => {
         body: JSON.stringify({
           proof: proof.proof,
           publicSignals: proof.publicSignals,
-          vk: vkey,
-          vkRegistered: false,
         }),
       });
 
