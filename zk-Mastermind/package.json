@@ -6,7 +6,6 @@
   "scripts": {
     "build:circuits": "node scripts/build-circuits.mjs",
     "build:contract": "node scripts/build-contract.mjs",
-    "authorize:arcade": "node --env-file .env.development scripts/authorize-arcade.mjs",
     "register:vkey": "node --env-file .env.development scripts/register-vkey.mjs",
     "dev": "next dev",
     "build": "next build",
